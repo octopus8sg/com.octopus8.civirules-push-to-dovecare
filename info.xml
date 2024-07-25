@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<extension key="org.civicoop.civirules" type="module">
+  <file>civirules</file>
+  <name>CiviRules</name>
+  <description>Native CiviCRM extension CiviRules</description>
+  <license>AGPL-3.0</license>
+  <urls>
+    <url desc="Main Extension Page">https://lab.civicrm.org/extensions/civirules</url>
+    <url desc="Documentation">https://docs.civicrm.org/civirules/en/latest</url>
+    <url desc="Support">http://www.civicoop.org</url>
+    <url desc="Licensing">http://civicrm.org/licensing</url>
+  </urls>
+  <maintainer>
+    <author>CiviCooP</author>
+    <email>helpdesk@civicoop.org</email>
+  </maintainer>
+  <releaseDate>2024-05-27</releaseDate>
+  <version>3.8</version>
+  <develStage>stable</develStage>
+  <compatibility>
+    <ver>5.49</ver>
+  </compatibility>
+  <civix>
+    <namespace>CRM/Civirules</namespace>
+    <format>23.02.1</format>
+  </civix>
+  <classloader>
+    <psr0 prefix="CRM_" path="."/>
+    <psr4 prefix="Civi\" path="Civi"/>
+  </classloader>
+  <mixins>
+    <mixin>menu-xml@1.0.0</mixin>
+    <mixin>mgd-php@1.0.0</mixin>
+    <mixin>smarty-v2@1.0.1</mixin>
+    <mixin>entity-types-php@1.0.0</mixin>
+  </mixins>
+  <upgrader>CRM_Civirules_Upgrader</upgrader>
+</extension>

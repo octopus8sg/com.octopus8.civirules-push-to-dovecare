@@ -1,0 +1,12 @@
+<div af-fieldset="">
+  <div class="af-container af-layout-inline">
+    <af-field name="label" />
+    <af-field name="trigger_id" defn="{input_attrs: {multiple: true}}" />
+    <af-field name="description" defn="{input_type: 'TextArea', input_attrs: {}}" />
+  </div>
+  <div class="af-container af-layout-inline">
+    <af-field name="is_active" defn="{input_type: 'Radio', afform_default: '1'}" />
+    <af-field name="CiviRulesRule_CiviRulesRuleTag_rule_id_01.rule_tag_id" defn="{input_attrs: {multiple: true}, label: 'Tags'}" />
+  </div>
+  <crm-search-display-table search-name="CiviRules" display-name="CiviRules_Table_1"></crm-search-display-table>
+</div>
