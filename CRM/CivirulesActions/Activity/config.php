@@ -6,9 +6,15 @@ return [
         'password' => 'pWE!OX7w4fu6aYQY',
         'dbname' => 'dev_dov',
     ],
+    // 'database' => [
+    //     'host' => 'localhost',
+    //     'username' => 'root',
+    //     'password' => '',
+    //     'dbname' => 'DovecareDB',
+    // ],
     'api' => [
-        'url' => 'https://cfs.aacsconnect.com/?page_id=5&civiwp=CiviCRM&q=civicrm%2Fajax%2Fapi4%2F',
-        'key' => 'PMFSpz0InIGCxSv0bnnfDDsU',
+        'url' => 'https://o8.aacsconnect.com/civicrm/ajax/api4',//'http://localhost/joseph/civicrm/ajax/api4',//
+        'key' => 'diEIofCG04bGNjwROCgOGT7MyMnYyDKSROWUXA0ceS4',//'beartesting',//
     ],
 ];
 ?>

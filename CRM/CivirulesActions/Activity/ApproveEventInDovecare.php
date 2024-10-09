@@ -32,12 +32,11 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
         $this->apiUrl = $apiConfig['url'];
         $this->apiKey = $apiConfig['key'];
 
-        // Log the initialization
-        Civi::log()->debug("Database and API initialized: DB Host - {$dbConfig['host']}, API URL - {$this->apiUrl}");
     }
 
     public function processAction(CRM_Civirules_TriggerData_TriggerData $triggerData) {
         $contactId = $triggerData->getContactId();
+        $activityId = $triggerData->getEntityId();
         Civi::log()->debug("Processing action for Contact ID: $contactId");
 
         $url = $this->apiUrl . '/Activity/get';
@@ -56,10 +55,8 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
                 'Event_Field.Group_AAP_is_catered_to',
             ],
             'where' => [
-                ['activity_type_id', '=', 67], 
-                ['status_id', '=', 12], 
-                ['Event_Field.mode_of_participation', '!=', 2]
-            ],
+    		['id', '=', $activityId],
+		],
             'orderBy' => ['modified_date' => 'DESC'],
             'limit' => 10,
         ];
@@ -305,47 +302,6 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
 
                     $dateTimeStmt->close();
                 }
-
-                // Update the activity with remaining slots and new title
-                $formattedDate = date('d/m/Y', strtotime($activity['activity_date_time']));
-                $newTitle = $title . '@' . $formattedDate;
-                $updateUrl = $this->apiUrl . '/Activity/update';
-                $updateParams = [
-                    'values' => [
-                        'Event_Field.Remaining_participants_slot' => $activity['Event_Field.Maximum_number_of_participants'],
-                        'Event_Field.title' => $newTitle
-                    ],
-                    'where' => [['id', '=', $activity['id']]],
-                ];
-
-                $updateRequest = stream_context_create([
-                    'http' => [
-                        'method' => 'POST',
-                        'header' => [
-                            'Content-Type: application/x-www-form-urlencoded',
-                            'X-Civi-Auth: Bearer ' . $this->apiKey,
-                        ],
-                        'content' => http_build_query(['params' => json_encode($updateParams)]),
-                    ],
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                    ]
-                ]);
-
-                $updateResponse = file_get_contents($updateUrl, FALSE, $updateRequest);
-                if ($updateResponse === FALSE) {
-                    Civi::log()->error("Failed to update activity in CiviCRM.");
-                    return false;
-                }
-
-                $updateResults = json_decode($updateResponse, TRUE);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    Civi::log()->error("JSON decode error during activity update: " . json_last_error_msg());
-                    return false;
-                }
-
-                Civi::log()->info("Activity updated successfully with new title: $newTitle");
             }
         }
 

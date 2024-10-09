@@ -37,7 +37,9 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
     }
 
     public function processAction(CRM_Civirules_TriggerData_TriggerData $triggerData) {
-        $contactId = $triggerData->getContactId();
+        // For testing, using a hardcoded contact ID
+        $contactId = 250;
+
         Civi::log()->debug("Processing action for Contact ID: $contactId");
 
         $url = $this->apiUrl . '/Activity/get';
@@ -58,6 +60,7 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
             'where' => [
                 ['activity_type_id', '=', 67], 
                 ['status_id', '=', 12], 
+                //['assignee_contact_id', '=', $contactId], 
                 ['Event_Field.mode_of_participation', '!=', 2]
             ],
             'orderBy' => ['modified_date' => 'DESC'],
@@ -107,26 +110,112 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
         $groupId = $recentActivity['Event_Field.Event_Type'];
         $activityID = $recentActivity['id'];
         $userId = 1;
-        $imageUrl = $this->generateRandomImageUrl(); // Use the generateRandomImageUrl function to generate the image URL
+        $imageUrl = 0; // Assuming generateRandomImageUrl() is defined in this class
         $status = 'approved';
         $createdAt = $updatedAt = date('Y-m-d H:i:s', strtotime('-8 hours'));
         $groupAAP = $recentActivity['Event_Field.Group_AAP_is_catered_to'];
         $CFSRange = $groupAAP == 1 ? 3 : 6;
         $eventRadius = '1km'; // Assuming no value for eventRadius
-        $fileId = $recentActivity['Event_Field.Image'];
+
+        //$fileId = $recentActivity['Event_Field.Image'];
+		$fileId = 1;
+        
+        try {
+            Civi::log()->debug("Attempting to retrieve file metadata for file ID: $fileId");
+
+            // Retrieve the file metadata from CiviCRM
+            $file = civicrm_api3('Attachment', 'getsingle', [
+                'return' => ["url"],
+                'id' => $fileId,
+            ]);
+
+            Civi::log()->debug("File metadata retrieved: " . json_encode($file));
+            $mimeType = isset($file['mime_type']) ? $file['mime_type'] : 'application/octet-stream';
+
+            // Check if the URL is provided in the API response
+            $fileUrl = isset($file['url']) ? $file['url'] : '';
+            Civi::log()->debug("URL extracted from API response: " . $fileUrl);
+
+            Civi::log()->info("File URL from API: " . $fileUrl);
+
+            // Initialize cURL session
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $fileUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Disable SSL verification for testing
+
+            Civi::log()->debug("Attempting to fetch file content using cURL from URL: $fileUrl");
+
+            // Execute cURL session
+            $fileContent = curl_exec($ch);
+
+            // Check for cURL errors
+            if (curl_errno($ch)) {
+                $error_msg = curl_error($ch);
+                Civi::log()->error("cURL error: " . $error_msg);
+                throw new Exception("Failed to retrieve file content from URL: " . $fileUrl . " - cURL Error: " . $error_msg);
+            } else {
+                // Log the size of the file content
+                $fileSize = strlen($fileContent);
+                Civi::log()->info("File content retrieved successfully. Size: " . $fileSize . " bytes.");
+            }
+
+            // Close cURL session
+            curl_close($ch);
+
+            $bucketName = getenv('BUCKET_NAME');
+            $keyName = 'uploads/' . basename($fileUrl); // Set the key (file path) in S3
+
+            Civi::log()->debug("Initializing the S3 client: Bucket - $bucketName, Key - $keyName");
+
+            // Initialize the S3 client
+            $s3Client = new S3Client([
+                'region' => getenv('BUCKET_REGION'),
+                'version' => 'latest',
+                'credentials' => [
+                    'key' => getenv('ACCESS_KEY'),
+                    'secret' => getenv('SECRET_ACCESS_KEY'),
+                ],
+            ]);
+
+            Civi::log()->info("Attempting to upload file to S3: $bucketName/$keyName");
+
+            try {
+                // Upload the file to S3
+                $result = $s3Client->putObject([
+                    'Bucket' => $bucketName,
+                    'Key' => $keyName,
+                    'Body' => $fileContent,
+                    'ContentType' => $mimeType, // Set the correct MIME type
+                ]);
+
+                $imageUrl = $result['ObjectURL']; // Store the S3 URL in $imageUrl
+                Civi::log()->info("File uploaded successfully to S3. S3 URL: " . $imageUrl);
+
+            } catch (AwsException $e) {
+                // Output error message if fails
+                Civi::log()->error("Failed to upload file to S3: " . $e->getMessage());
+                throw new Exception("S3 Upload Error: " . $e->getMessage());
+            }
+
+            Civi::log()->info("Continuing after S3 upload...");
+
+        } catch (Exception $e) {
+            Civi::log()->error("Error: " . $e->getMessage());
+        }
 
         // Check if the event already exists
         $existingEventId = $this->checkIfEventExists($activityID);
         if ($existingEventId !== null) {
             $eventId = $existingEventId;
 
-            $updateStmt = $this->db->prepare("UPDATE Events SET groupId = ?, userId = ?, title = ?, description = ?, eventAddress = ?, eventRadius = ?, status = ?, updatedAt = ?, CFSRange = ?, domain = ? WHERE id = ?");
+            $updateStmt = $this->db->prepare("UPDATE Events SET groupId = ?, userId = ?, title = ?, imageUrl = ?, description = ?, eventAddress = ?, eventRadius = ?, status = ?, updatedAt = ?, CFSRange = ?, domain = ? WHERE id = ?");
             if ($updateStmt === false) {
                 Civi::log()->error("Failed to prepare update statement for Events.");
                 return false;
             }
 
-            if (!$updateStmt->bind_param('iissssssisi', $groupId, $userId, $title, $description, $address, $eventRadius, $status, $updatedAt, $CFSRange, $domain, $eventId)) {
+            if (!$updateStmt->bind_param('iisssssssisi', $groupId, $userId, $title, $imageUrl, $description, $address, $eventRadius, $status, $updatedAt, $CFSRange, $domain, $eventId)) {
                 Civi::log()->error("Failed to bind parameters for update statement.");
                 $updateStmt->close();
                 return false;
@@ -141,91 +230,6 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
             $updateStmt->close();
 
         } else {
-                 
-            try {
-                Civi::log()->debug("Attempting to retrieve file metadata for file ID: $fileId");
-
-                // Retrieve the file metadata from CiviCRM
-                $file = civicrm_api3('Attachment', 'getsingle', [
-                    'return' => ["url"],
-                    'id' => $fileId,
-                ]);
-
-                Civi::log()->debug("File metadata retrieved: " . json_encode($file));
-                $mimeType = isset($file['mime_type']) ? $file['mime_type'] : 'application/octet-stream';
-
-                // Check if the URL is provided in the API response
-                $fileUrl = isset($file['url']) ? $file['url'] : '';
-                Civi::log()->debug("URL extracted from API response: " . $fileUrl);
-
-                Civi::log()->info("File URL from API: " . $fileUrl);
-
-                // Initialize cURL session
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $fileUrl);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Disable SSL verification for testing
-
-                Civi::log()->debug("Attempting to fetch file content using cURL from URL: $fileUrl");
-
-                // Execute cURL session
-                $fileContent = curl_exec($ch);
-
-                // Check for cURL errors
-                if (curl_errno($ch)) {
-                    $error_msg = curl_error($ch);
-                    Civi::log()->error("cURL error: " . $error_msg);
-                    throw new Exception("Failed to retrieve file content from URL: " . $fileUrl . " - cURL Error: " . $error_msg);
-                } else {
-                    // Log the size of the file content
-                    $fileSize = strlen($fileContent);
-                    Civi::log()->info("File content retrieved successfully. Size: " . $fileSize . " bytes.");
-                }
-
-                // Close cURL session
-                curl_close($ch);
-
-                $bucketName = getenv('BUCKET_NAME');
-            
-                $keyName = 'event_images/' . $imageUrl; // Generate a random file name
-
-                Civi::log()->debug("Initializing the S3 client: Bucket - $bucketName, Key - $keyName");
-
-                // Initialize the S3 client
-                $s3Client = new S3Client([
-                    'region' => getenv('BUCKET_REGION'),
-                    'version' => 'latest',
-                    'credentials' => [
-                        'key' => getenv('ACCESS_KEY'),
-                        'secret' => getenv('SECRET_ACCESS_KEY'),
-                    ],
-                ]);
-
-                Civi::log()->info("Attempting to upload file to S3: $bucketName/$keyName");
-
-                try {
-                    // Upload the file to S3
-                    $result = $s3Client->putObject([
-                        'Bucket' => $bucketName,
-                        'Key' => $keyName,
-                        'Body' => $fileContent,
-                        'ContentType' => $mimeType, // Set the correct MIME type
-                    ]);
-
-                    $imageUrl = basename($result['ObjectURL']); // Store the S3 URL in $imageUrl
-                    Civi::log()->info("File uploaded successfully to S3. S3 URL: " . $imageUrl);
-
-                } catch (AwsException $e) {
-                    // Output error message if fails
-                    Civi::log()->error("Failed to upload file to S3: " . $e->getMessage());
-                    throw new Exception("S3 Upload Error: " . $e->getMessage());
-                }
-
-                Civi::log()->info("Continuing after S3 upload...");
-
-            } catch (Exception $e) {
-                Civi::log()->error("Error: " . $e->getMessage());
-            }
             // Insert the event into the Events table
             $stmt = $this->db->prepare("INSERT INTO Events (groupId, userId, title, imageUrl, description, eventAddress, eventRadius, status, createdAt, updatedAt, CFSRange, domain) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt === false) {
@@ -431,12 +435,7 @@ class CRM_CivirulesActions_Activity_ApproveEventInDovecare extends CRM_Civirules
 
         return $existingEventId ? $existingEventId : null;
     }
-    
-    private function generateRandomImageUrl() {
-        $uniqueId = uniqid();
-        return $uniqueId . '.jpg'; // Generate a unique filename with a .jpg extension
-    }
-    
+
     public function __destruct() {
         // Close the database connection
         if ($this->db) {

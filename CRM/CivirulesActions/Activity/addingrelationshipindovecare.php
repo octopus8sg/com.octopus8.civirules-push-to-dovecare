@@ -1,7 +1,7 @@
 <?php
 
 class CRM_CivirulesActions_Activity_AddingRelationshipinDovecare extends CRM_Civirules_Action {
-  private $db;
+   private $db;
   private $config;
 
   public function __construct() {
@@ -64,89 +64,104 @@ class CRM_CivirulesActions_Activity_AddingRelationshipinDovecare extends CRM_Civ
 
     $spouseContactId = $relationships['values'][0]['contact_id_b'];
 
-    // Fetch the user ID for the original contact
+    // Fetch the user IDs for the original contact and spouse
+    $userId = $this->getUserIdByContactId($contactId);
+    if ($userId === null) {
+        return false;
+    }
+
+    $spouseUserId = $this->getUserIdByContactId($spouseContactId);
+    if ($spouseUserId === null) {
+        return false;
+    }
+
+    // Check and insert the relationship twice
+    if (!$this->checkAndInsertRelationship($userId, $spouseUserId, $spouseContactId)) {
+        return false;
+    }
+
+    if (!$this->checkAndInsertRelationship($spouseUserId, $userId, $contactId)) {
+        return false;
+    }
+
+    return true;
+  }
+
+  private function getUserIdByContactId($contactId) {
     $query = $this->db->prepare("SELECT id FROM Users WHERE contactId = ?");
     if ($query === false) {
-        return false;
+        Civi::log()->error("Query preparation failed: " . $this->db->error);
+        return null;
     }
 
     if (!$query->bind_param('i', $contactId)) {
+        Civi::log()->error("Binding parameters failed: " . $query->error);
         $query->close();
-        return false;
+        return null;
     }
 
     if (!$query->execute()) {
+        Civi::log()->error("Query execution failed: " . $query->error);
         $query->close();
-        return false;
+        return null;
     }
 
     $query->bind_result($userId);
-    if (!$query->fetch()) {
-        $query->close();
-        return false;
-    }
+    $query->fetch();
     $query->close();
 
-    // Fetch the user ID for the spouse contact
-    $query = $this->db->prepare("SELECT id FROM Users WHERE contactId = ?");
-    if ($query === false) {
+    return $userId ? $userId : null;
+  }
+
+  private function checkAndInsertRelationship($userId, $spouseUserId, $spouseContactId) {
+    // Check if the relationship already exists in the Spouses table
+    $checkStmt = $this->db->prepare("SELECT COUNT(*) FROM Spouses WHERE userId = ? AND spouseUserId = ? AND spouseContactId = ?");
+    if ($checkStmt === false) {
+        Civi::log()->error("Check statement preparation failed: " . $this->db->error);
         return false;
     }
 
-    if (!$query->bind_param('i', $spouseContactId)) {
-        $query->close();
+    if (!$checkStmt->bind_param('iii', $userId, $spouseUserId, $spouseContactId)) {
+        Civi::log()->error("Binding parameters for check failed: " . $checkStmt->error);
+        $checkStmt->close();
         return false;
     }
 
-    if (!$query->execute()) {
-        $query->close();
+    if (!$checkStmt->execute()) {
+        Civi::log()->error("Check execution failed: " . $checkStmt->error);
+        $checkStmt->close();
         return false;
     }
 
-    $query->bind_result($spouseUserId);
-    if (!$query->fetch()) {
-        $query->close();
-        return false;
-    }
-    $query->close();
+    $checkStmt->bind_result($count);
+    $checkStmt->fetch();
+    $checkStmt->close();
 
-    // Update the database with the spouse's contact ID and user ID
-    $updateStmt = $this->db->prepare("UPDATE Users SET spouseContactId = ?, spouseUserId = ? WHERE contactId = ?");
+    if ($count > 0) {
+        return true;
+    }
+
+    // Insert the relationship into the spouse table
+    $insertStmt = $this->db->prepare("INSERT INTO Spouses (userId, spouseUserId, spouseContactId) VALUES (?, ?, ?)");
     
-    if ($updateStmt === false) {
+    if ($insertStmt === false) {
+        Civi::log()->error("Insert statement preparation failed: " . $this->db->error);
         return false;
     }
 
-    if (!$updateStmt->bind_param('iii', $spouseContactId, $spouseUserId, $contactId)) {
-        $updateStmt->close();
+    if (!$insertStmt->bind_param('iii', $userId, $spouseUserId, $spouseContactId)) {
+        Civi::log()->error("Binding parameters for insert failed: " . $insertStmt->error);
+        $insertStmt->close();
         return false;
     }
 
-    if (!$updateStmt->execute()) {
-        $updateStmt->close();
+    if (!$insertStmt->execute()) {
+        Civi::log()->error("Insert execution failed: " . $insertStmt->error);
+        $insertStmt->close();
         return false;
     }
 
-    $updateStmt->close();
-
-    // Now, also update the spouse's record with the original contact ID and user ID
-    $updateStmt = $this->db->prepare("UPDATE Users SET spouseContactId = ?, spouseUserId = ? WHERE contactId = ?");
-    
-    if ($updateStmt === false) {
-        return false;
-    }
-
-    if (!$updateStmt->bind_param('iii', $contactId, $userId, $spouseContactId)) {
-        $updateStmt->close();
-        return false;
-    }
-
-    if (!$updateStmt->execute()) {
-        $updateStmt->close();
-        return false;
-    }
-
-    $updateStmt->close();
+    $insertStmt->close();
 
     return true;
   }

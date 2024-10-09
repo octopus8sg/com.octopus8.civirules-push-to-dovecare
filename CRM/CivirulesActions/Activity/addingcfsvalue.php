@@ -1,6 +1,7 @@
 <?php
 class CRM_CivirulesActions_Activity_addingcfsvalue extends CRM_Civirules_Action {
-  private $db;
+ 
+ private $db;
   private $config;
 
   public function __construct() {
@@ -49,8 +50,8 @@ class CRM_CivirulesActions_Activity_addingcfsvalue extends CRM_Civirules_Action 
     // Fetch the CFS value from the API
     $cfsurl = $this->config['api']['url'] . '/Activity/get';
     $cfsparams = [
-      'select' => ['Mandatory_Intervention_Record.CFS_Clinical_Frailty_Scores'],
-      'where' => [['activity_type_id', '=', 71], ['target_contact_id', 'CONTAINS', $contactId]],
+      'select' => ['CST_form_v2.CFS_Clinical_Frailty_Scores', 'CST_form_v2.CFS_Clinical_Frailty_Scores:label'],
+      'where' => [['activity_type_id', '=', 77], ['target_contact_id', 'CONTAINS', $contactId]],
       'orderBy' => ['id' => 'DESC'],
       'limit' => 1,
     ];
@@ -85,7 +86,7 @@ class CRM_CivirulesActions_Activity_addingcfsvalue extends CRM_Civirules_Action 
     if ($count > 0) {
         // Update existing record
         Civi::log()->info("Contact ID: $contactId exists. Updating CFS value.");
-        $stmt = $this->db->prepare("UPDATE users SET CFS = ? WHERE contactId = ?");
+        $stmt = $this->db->prepare("UPDATE Users SET CFS = ? WHERE contactId = ?");
         if ($stmt === false) {
             Civi::log()->error("Prepare failed: " . $this->db->error);
             return false;
