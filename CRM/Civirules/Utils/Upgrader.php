@@ -9,7 +9,24 @@ class CRM_Civirules_Utils_Upgrader {
    * Method to check if conditions are in the DB and insert if not 
    */
   public static function checkCiviRulesActions() {
+
     $actions = array(
+      'CRM_CivirulesActions_Activity_UpdateSlots' => array(
+        'label' => 'Update Slots',
+        'name' => 'update_slot',
+      ),
+      'CRM_CivirulesActions_Activity_RecommendedAAP' => array(
+        'label' => 'Recommended AAP',
+        'name' => 'recommended_aap',
+      ),
+      'CRM_CivirulesActions_Activity_UpdateFieldsinAAP' => array(
+        'label' => 'Update Fields in AAP',
+        'name' => 'update_fields_in_aap',
+      ),
+      'CRM_CivirulesActions_Activity_CreatingAAC' => array(
+        'label' => 'Creating AAC account in Dovecare database',
+        'name' => 'creating_aac_account_in_dovecare',
+      ),
       'CRM_CivirulesActions_Activity_AssignJobs' => array(
         'label' => 'Assigning Jobs To Dovecare database',
         'name' => 'assigning_jobs_to_dovecare',
@@ -120,6 +137,10 @@ class CRM_Civirules_Utils_Upgrader {
         'label' => 'Activity is (not) in Campaign(s)',
         'name' => 'activity_in_campaign',
       ),
+      'CRM_CivirulesConditions_Activity_CheckParticipantSlot' => array(
+        'label' => 'Check Participant Slot',
+        'name' => 'check_participant_slot',
+      ),
       'CRM_CivirulesConditions_Activity_Details' => array(
         'label' => 'Activity Details',
         'name' => 'contact_has_activity_with_details',
@@ -199,10 +220,6 @@ class CRM_Civirules_Utils_Upgrader {
       'CRM_CivirulesConditions_Contact_HasPhone' => array(
         'label' => 'Contact Has Phone',
         'name' => 'contact_has_phone',
-      ),
-      'CRM_CivirulesConditions_Contact_PostalCodeExists' => array(
-        'label' => 'Check if postal code exists',
-        'name' => 'PostalCodeExists',
       ),
       'CRM_CivirulesConditions_Contact_HasType' => array(
         'label' => 'Contact is (not) of Type(s)',
